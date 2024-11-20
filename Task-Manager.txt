@@ -1,5 +1,6 @@
 import json
 import os
+import hashlib
 
 # ANSI color codes for terminal output (to style terminal text)
 RED = "\033[91m"
@@ -11,117 +12,229 @@ PENDING_ICON = "❌"
 COMPLETED_ICON = "✅"
 HEADER = "\033[1m"  # Bold text
 
+
 class Task:
     """Represents a single task."""
-    
+
     def __init__(self, task_id, title, completed=False):
         """Initializes a task with an ID, title, and completion status."""
-        self.id = task_id
-        self.title = title
-        self.completed = completed
+        self.id = task_id  # Task ID
+        self.title = title  # Task title
+        self.completed = completed  # Task completion status
 
     def to_dict(self):
-        """Converts the task object to a dictionary format."""
+        """Converts the task object to a dictionary format for storage."""
         return {"id": self.id, "title": self.title, "completed": self.completed}
 
     @staticmethod
     def from_dict(data):
-        """Creates a task object from a dictionary."""
+        """Creates a task object from a dictionary (used when loading tasks)."""
         return Task(data["id"], data["title"], data["completed"])
 
-# Global list to store tasks
-tasks = []
 
-def load_tasks():
-    """Loads tasks from a JSON file into the tasks list."""
-    if os.path.exists("tasks.json"):  # Check if the tasks.json file exists
-        with open("tasks.json", "r") as file:  # Open the file in read mode
-            for task_data in json.load(file):  # Load JSON data
-                tasks.append(Task.from_dict(task_data))  # Convert each task and add to the list
+# Global list to store users
+users = []
 
-def save_tasks():
-    """Saves all tasks to a JSON file."""
-    with open("tasks.json", "w") as file:  # Open the file in write mode
-        json.dump([task.to_dict() for task in tasks], file, indent=4)  # Save tasks as a JSON array
 
-def add_task(title):
-    """Adds a new task to the task list."""
-    task_id = len(tasks) + 1  # Assign a new ID based on the current number of tasks
-    tasks.append(Task(task_id, title))  # Create a new task and append it to the tasks list
-    print(f"{GREEN}Task '{title}' added successfully!{RESET}")  # Output confirmation message
+class User:
+    """Represents a user with an email and hashed password."""
 
-def view_tasks():
-    """Displays all tasks with their status."""
-    if not tasks:  # Check if the task list is empty
-        print(f"{YELLOW}No tasks available. Please add some tasks!{RESET}")  # Inform the user
+    def __init__(self, email, password):
+        """Initializes a user with an email and hashed password."""
+        self.email = email  # Store user email
+        self.password = self.hash_password(password)  # Hash and store user password
+
+    def hash_password(self, password):
+        """Hashes the password using SHA-256 for security."""
+        return hashlib.sha256(password.encode()).hexdigest()  # Hash the password using SHA-256
+
+    def to_dict(self):
+        """Converts the user object to a dictionary format for storage."""
+        return {"email": self.email, "password": self.password}
+
+    @staticmethod
+    def from_dict(data):
+        """Creates a user object from a dictionary (used when loading users)."""
+        user = User(data["email"], "")  # Create a user object with an empty password
+        user.password = data["password"]  # Assign the stored hashed password
+        return user
+
+
+def load_users():
+    """Loads users from a JSON file into the users list."""
+    global users
+    if os.path.exists("users.json"):  # Check if users file exists
+        with open("users.json", "r") as file:
+            # Read users data from file and load them into the global users list
+            users = [User.from_dict(user_data) for user_data in json.load(file)]
+
+
+def save_users():
+    """Saves all users to a JSON file."""
+    with open("users.json", "w") as file:
+        # Convert each user object to a dictionary and save to JSON
+        json.dump([user.to_dict() for user in users], file, indent=4)
+
+
+def load_tasks_for_user(user_email):
+    """Loads tasks specific to the logged-in user from a file."""
+    # Create a filename for the user-specific tasks using email
+    tasks_file = f"tasks_{user_email.replace('@', '_').replace('.', '_')}.json"
+    tasks = []  # Initialize an empty task list
+    if os.path.exists(tasks_file):  # Check if tasks file for the user exists
+        with open(tasks_file, "r") as file:
+            # Read tasks data from the file and load them into the tasks list
+            tasks = [Task.from_dict(task_data) for task_data in json.load(file)]
+    return tasks
+
+
+def save_tasks_for_user(user_email, tasks):
+    """Saves tasks specific to the logged-in user to a file."""
+    # Create a filename for the user-specific tasks using email
+    tasks_file = f"tasks_{user_email.replace('@', '_').replace('.', '_')}.json"
+    with open(tasks_file, "w") as file:
+        # Convert each task object to a dictionary and save to the user's task file
+        json.dump([task.to_dict() for task in tasks], file, indent=4)
+
+
+def register_user():
+    """Handles user registration."""
+    email = input("Enter your email: ").strip().lower()  # Get email from user (ensure lowercase and no spaces)
+    password = input("Enter your password: ").strip()  # Get password from user
+
+    # Check if the email is already registered
+    if any(user.email == email for user in users):
+        print(f"{RED}Email already registered! Please try logging in.{RESET}")
+        return None  # Return None if user already exists
+
+    # Create a new user object and add it to the users list
+    new_user = User(email, password)
+    users.append(new_user)
+    save_users()  # Save the updated users list
+    print(f"{GREEN}User registered successfully!{RESET}")
+    return new_user  # Return the newly registered user
+
+
+def login_user():
+    """Handles user login."""
+    email = input("Enter your email: ").strip().lower()  # Get email from user
+    password = input("Enter your password: ").strip()  # Get password from user
+
+    # Find the user by email and check if the password matches
+    user = next((user for user in users if user.email == email), None)
+
+    # Validate the login by comparing the hashed password
+    if user and user.password == hashlib.sha256(password.encode()).hexdigest():
+        print(f"{GREEN}Login successful!{RESET}")
+        return user  # Return the user object if login is successful
     else:
-        print(f"\n{HEADER}--------------------Task List---------------------{RESET}")
-        for task in tasks:  # Loop through each task
-            status = f"{GREEN}{COMPLETED_ICON} Completed{RESET}" if task.completed else f"{RED}{PENDING_ICON} Pending{RESET}"
-            # Print task details (ID, title, and status)
-            print(f"{BLUE}[{task.id}]  {task.title:<25} {status}")
-        print("-" * 50)  # Print a separator line
+        print(f"{RED}Invalid email or password!{RESET}")
+        return None  # Return None if login failed
 
-def delete_task(task_id):
-    """Deletes a task by its ID."""
-    task = next((t for t in tasks if t.id == task_id), None)  # Find task by ID
+
+def add_task(title, tasks, user_email):
+    """Adds a new task to the task list and saves it."""
+    task_id = len(tasks) + 1  # Generate a new task ID
+    tasks.append(Task(task_id, title))  # Add the new task to the list
+    save_tasks_for_user(user_email, tasks)  # Save tasks after adding
+    print(f"{GREEN}Task '{title}' added successfully!{RESET}")  # Success message
+
+
+def view_tasks(tasks):
+    """Displays all tasks with their status."""
+    if not tasks:  # Check if there are no tasks
+        print(f"{YELLOW}No tasks available. Please add some tasks!{RESET}")
+    else:
+        # Print the task list with their ID, title, and status (Pending or Completed)
+        print(f"\n{HEADER}--------------------Task List---------------------{RESET}")
+        for task in tasks:
+            status = f"{GREEN}{COMPLETED_ICON} Completed{RESET}" if task.completed else f"{RED}{PENDING_ICON} Pending{RESET}"
+            print(f"{BLUE}[{task.id}]  {task.title:<25} {status}")
+        print("-" * 50)
+
+
+def delete_task(task_id, tasks, user_email):
+    """Deletes a task by its ID and saves the updated task list."""
+    task = next((t for t in tasks if t.id == task_id), None)  # Find the task by ID
     if task:
         tasks.remove(task)  # Remove the task from the list
-        print(f"{GREEN}Task with ID {task_id} deleted.{RESET}")  # Confirm deletion
+        save_tasks_for_user(user_email, tasks)  # Save tasks after deletion
+        print(f"{GREEN}Task with ID {task_id} deleted.{RESET}")  # Success message
     else:
-        print(f"{RED}Task with ID {task_id} not found.{RESET}")  # If task ID is not found
+        print(f"{RED}Task with ID {task_id} not found.{RESET}")  # Error message if task not found
 
-def mark_task_complete(task_id):
-    """Marks a task as completed."""
-    task = next((t for t in tasks if t.id == task_id), None)  # Find task by ID
+
+def mark_task_complete(task_id, tasks, user_email):
+    """Marks a task as completed and saves the updated task list."""
+    task = next((t for t in tasks if t.id == task_id), None)  # Find the task by ID
     if task:
         task.completed = True  # Mark the task as completed
-        print(f"{GREEN}Task '{task.title}' marked as completed!{RESET}")  # Confirm the update
+        save_tasks_for_user(user_email, tasks)  # Save tasks after updating completion status
+        print(f"{GREEN}Task '{task.title}' marked as completed!{RESET}")  # Success message
     else:
-        print(f"{RED}Task with ID {task_id} not found.{RESET}")  # If task ID is not found
+        print(f"{RED}Task with ID {task_id} not found.{RESET}")  # Error message if task not found
 
-def display_menu():
+
+def display_menu(current_user):
     """Displays the main menu for user interaction."""
-    print("\n" + "="*30)  # Print separator line
-    print(f"{HEADER}Task Manager{RESET}")  # Print the title of the application
-    print("="*30)
+    print("\n" + "=" * 30)
+    print(f"{HEADER}Task Manager - Logged in as {current_user.email}{RESET}")  # Display logged-in user's email
+    print("=" * 30)
     print(f"1. {BLUE}Add Task{RESET}")
     print(f"2. {BLUE}View Tasks{RESET}")
     print(f"3. {BLUE}Delete Task{RESET}")
     print(f"4. {BLUE}Mark Task Complete{RESET}")
-    print(f"5. {RED}Exit{RESET}")
-    print("="*30)
+    print(f"5. {RED}Log Out{RESET}")
+    print("=" * 30)
+
 
 def main():
     """Main program loop to interact with the user."""
-    load_tasks()  # Load existing tasks from file at the start of the program
+    load_users()  # Load existing users from the file
+
+    print(f"{HEADER}Welcome to the Task Manager!{RESET}")
+
+    current_user = None
+    while current_user is None:
+        choice = input(f"\nDo you have an account? (y/n): ").strip().lower()
+        if choice == 'y':
+            current_user = login_user()  # Log in the user
+        elif choice == 'n':
+            current_user = register_user()  # Register a new user
+        else:
+            print(f"{RED}Invalid option. Please try again.{RESET}")
+
     while True:
-        display_menu()  # Show the menu
-        choice = input("\nEnter your choice: ")  # Get user input
+        # Load tasks for the logged-in user
+        tasks = load_tasks_for_user(current_user.email)
+
+        display_menu(current_user)  # Show the menu
+        choice = input("\nEnter your choice: ")
 
         if choice == "1":
-            title = input("Enter task title: ")  # Ask user for task title
-            add_task(title)  # Add the task to the list
+            title = input("Enter task title: ")  # Get task title from user
+            add_task(title, tasks, current_user.email)  # Add task to user's task list
         elif choice == "2":
-            view_tasks()  # Display all tasks
+            view_tasks(tasks)  # View the list of tasks
         elif choice == "3":
             try:
-                task_id = int(input("Enter task ID to delete: "))  # Get task ID for deletion
-                delete_task(task_id)  # Delete the specified task
+                task_id = int(input("Enter task ID to delete: "))  # Get task ID to delete
+                delete_task(task_id, tasks, current_user.email)  # Delete the task
             except ValueError:
                 print(f"{RED}Invalid task ID.{RESET}")  # Handle invalid input
         elif choice == "4":
             try:
                 task_id = int(input("Enter task ID to mark as complete: "))  # Get task ID to mark as complete
-                mark_task_complete(task_id)  # Mark the specified task as complete
+                mark_task_complete(task_id, tasks, current_user.email)  # Mark task as complete
             except ValueError:
                 print(f"{RED}Invalid task ID.{RESET}")  # Handle invalid input
         elif choice == "5":
-            save_tasks()  # Save tasks before exiting the program
-            print(f"{GREEN}Goodbye!{RESET}")  # Output goodbye message
-            break  # Exit the loop and end the program
+            save_tasks_for_user(current_user.email, tasks)  # Save tasks before logging out
+            print(f"{GREEN}Logging out...{RESET}")
+            break  # Break from loop to log out
         else:
-            print(f"{RED}Invalid choice. Please try again.{RESET}")  # Handle invalid menu choice
+            print(f"{RED}Invalid choice. Please try again.{RESET}")  # Handle invalid menu option
+
 
 # Run the program
 if __name__ == "__main__":

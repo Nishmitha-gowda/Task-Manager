@@ -168,15 +168,15 @@ def mark_task_complete(task_id, tasks, user_email):
 
 def display_menu(current_user):
     """Displays the main menu for user interaction."""
-    print("\n" + "=" * 30)
+    print("\n" + "=" * 60)
     print(f"{HEADER}Task Manager - Logged in as {current_user.email}{RESET}")
-    print("=" * 30)
+    print("=" * 60)
     print(f"1. {BLUE}Add Task{RESET}")
     print(f"2. {BLUE}View Tasks{RESET}")
     print(f"3. {BLUE}Delete Task{RESET}")
     print(f"4. {BLUE}Mark Task Complete{RESET}")
     print(f"5. {RED}Log Out{RESET}")
-    print("=" * 30)
+    print("=" * 60)
 
 
 def main():

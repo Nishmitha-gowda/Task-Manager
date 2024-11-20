@@ -35,7 +35,7 @@ With color-coded status indications, this Python project improves the user exper
 ```
 
 ## Task File
-- The tasks are stored in a tasks.json file. This file will be created automatically upon adding the first task.
+- The tasks are stored in a `tasks.json` file. This file will be created automatically upon adding the first task.
 
 ## Functionalities
 - **Add Task**:
